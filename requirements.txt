@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+sentence-transformers
+faiss-cpu
+numpy
+pandas
+google-generativeai
+streamlit
+requests
+tqdm
+openpyxl
+langchain
+langchain_google_genai
