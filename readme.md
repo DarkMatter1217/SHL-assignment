@@ -92,7 +92,7 @@ pip install -r requirements.txt
 
 ##  How to Run
 
-### ▶️ Option 1: Streamlit Frontend (Recommended)
+### ▶️ Option 1: Streamlit Frontend (https://shl-assignment-xkwpqrypjos2fak6uorrev.streamlit.app/) 
 ```bash
 streamlit run frontend/app.py
 ```
