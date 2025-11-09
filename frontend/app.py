@@ -5,7 +5,7 @@ import requests
 import pandas as pd
 import random
 
-st.set_page_config(page_title="🌍 SHL Smart Assessment Recommender", layout="centered")
+st.set_page_config(page_title=" SHL Smart Assessment Recommender", layout="centered")
 
 st.markdown(
     """
@@ -20,12 +20,12 @@ st.markdown(
 )
 
 query = st.text_area(
-    "✍️ Enter Job Description or Hiring Requirement:",
+    "Enter Job Description or Hiring Requirement:",
     placeholder="e.g. Hiring a software engineer with strong Python and teamwork skills...",
     height=200
 )
 
-if st.button("✨ Get AI-Powered Recommendations"):
+if st.button("✨ Getting Recommendations"):
     if not query.strip():
         st.warning("Please enter a job description first.")
     else:
@@ -68,4 +68,4 @@ if st.button("✨ Get AI-Powered Recommendations"):
                         df["Link"] = df["url"].apply(lambda u: f'<a href="{u}" target="_blank">🔗 Open</a>' if u else "")
                         display_df = df[["Rank", "assessment_name", "Link"]].rename(columns={"assessment_name": "Assessment Name"})
                         st.markdown(display_df.to_html(escape=False, index=False), unsafe_allow_html=True)
-                        st.success(f"✅ Gemini reranked and returned {len(df)} assessments automatically.")
+                        st.success(f" Gemini reranked and returned {len(df)} assessments automatically.")
