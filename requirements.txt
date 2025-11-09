@@ -4,8 +4,8 @@ pandas
 faiss-cpu
 numpy
 sentence-transformers
-langchain
-langchain-google-genai
-google-generativeai
+langchain==0.1.20
+langchain-core==0.1.52
+langchain-google-genai==1.0.5
+pydantic==1.10.13
 streamlit
-pydantic

@@ -13,7 +13,7 @@ import os
 # 🔧 CONFIGURATION
 # ==========================================================
 API_URL = "http://localhost:8000/recommend"   # FastAPI backend endpoint
-INPUT_FILE = r"data/Gen_AI Dataset.xlsx"      # Path to your dataset
+INPUT_FILE = r"test.xlsx"      # Path to your dataset
 OUTPUT_FILE = "submission.csv"                # Final output file
 
 # ==========================================================
