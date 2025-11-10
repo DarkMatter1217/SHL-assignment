@@ -1,24 +1,16 @@
-import os
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import pandas as pd
 import faiss
 import numpy as np
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import os
 from sentence_transformers import SentenceTransformer
 from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel
 
-# ✅ Lazy load placeholders
-df = None
-index = None
-embeddings = None
-embedder = None
-model = None
+app = FastAPI(title="SHL Backend", version="1.0")
 
-# ✅ FastAPI app setup
-app = FastAPI(title="SHL GenAI Backend", version="1.0")
-
-# ✅ CORS setup
+# Allow frontend requests
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,64 +19,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Model paths
-DATA_PATH = "data/data.csv"
-FAISS_PATH = "faiss_store.index"
-EMB_PATH = "embeddings.npy"
+# Globals
+df, index, embedder, model = None, None, None, None
+ROOT = os.path.dirname(os.path.abspath(__file__))
+DATA_PATH = os.path.join(ROOT, "..", "data", "catalog_clean.csv")
+FAISS_PATH = os.path.join(ROOT, "..", "embeddings", "vector_store.faiss")
+EMB_PATH = os.path.join(ROOT, "..", "embeddings", "embeddings.npy")
 
-# ✅ Health check route
-@app.get("/health")
-def health_check():
-    return {"status": "ok", "message": "LangChain Gemini backend live 🚀"}
-
-# ✅ Pydantic input model
-class QueryRequest(BaseModel):
+class Query(BaseModel):
     query: str
 
-# ✅ Function to load models and data only once
-def load_resources():
-    global df, index, embeddings, embedder, model
+@app.get("/health")
+def health():
+    return {"status": "ok", "message": "Backend live 🚀"}
 
+def load_all():
+    global df, index, embedder, model
     if df is None:
-        print("📂 Loading dataset...")
         df = pd.read_csv(DATA_PATH)
-
     if index is None:
-        print("🧠 Loading FAISS index...")
         index = faiss.read_index(FAISS_PATH)
-
-    if embeddings is None:
-        print("📦 Loading embeddings...")
-        embeddings = np.load(EMB_PATH)
-
     if embedder is None:
-        print("🔍 Loading SentenceTransformer...")
         embedder = SentenceTransformer("all-MiniLM-L6-v2")
-
     if model is None:
-        print("🤖 Initializing Gemini model...")
-        GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
-        if not GEMINI_KEY:
-            raise ValueError("❌ Missing GEMINI_API_KEY in Render environment variables")
-        model = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=GEMINI_KEY)
+        key = os.environ.get("GEMINI_API_KEY")
+        if not key:
+            raise ValueError("GEMINI_API_KEY not set")
+        model = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=key)
+    print("✅ Resources loaded")
 
-    print("✅ All resources loaded successfully.")
-
-# ✅ Recommendation endpoint
 @app.post("/recommend/recommend")
-def recommend(req: QueryRequest):
-    load_resources()
-
-    query_vector = embedder.encode([req.query])
-    distances, indices = index.search(np.array(query_vector, dtype=np.float32), k=5)
-
-    results = df.iloc[indices[0]][["name", "description", "link"]].to_dict(orient="records")
-
+def recommend(req: Query):
+    load_all()
+    emb = embedder.encode([req.query], convert_to_numpy=True)
+    D, I = index.search(emb.astype("float32"), k=5)
+    results = df.iloc[I[0]][["assessment_name", "category", "test_type", "url"]].to_dict(orient="records")
     return {"query": req.query, "recommendations": results}
 
-# ✅ Root route
 @app.get("/")
 def root():
-    return {"message": "Backend live ✅ Use /recommend/recommend to query."}
+    return {"message": "Use /recommend/recommend to query ✅"}
 
-# ⚠️ Note: Removed uvicorn.run() to prevent double boot under Gunicorn
+# ⚠️ NO uvicorn.run() here! Gunicorn handles it.
