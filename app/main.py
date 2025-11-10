@@ -147,5 +147,12 @@ def recommend(req: RecommendRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port)
+    import os
+
+    # Render injects PORT dynamically
+    port = int(os.environ.get("PORT", "8000"))
+    print(f"🚀 Starting server on port {port} ...")
+
+    # Important: Use 'app' directly — not 'app.main:app'
+    # otherwise uvicorn fails to detect live port in container.
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
