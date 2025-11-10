@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import faiss
@@ -6,82 +6,95 @@ import pandas as pd
 import gc
 import threading
 import os
+import time
 
-# Paths for FAISS and CSV
+# === Absolute safe paths (Render environment independent) ===
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FAISS_PATH = os.path.join(BASE_DIR, "../embeddings/vector_store.faiss")
-DATA_PATH = os.path.join(BASE_DIR, "../data/catalog_clean.csv")
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
 
-# FastAPI setup
+FAISS_PATH = os.path.join(ROOT_DIR, "embeddings", "vector_store.faiss")
+DATA_PATH = os.path.join(ROOT_DIR, "data", "catalog_clean.csv")
+
+print("🔍 FAISS_PATH =", FAISS_PATH)
+print("🔍 DATA_PATH =", DATA_PATH)
+
+# === FastAPI setup ===
 app = FastAPI(title="SHL GenAI Backend", version="1.0")
 
-# CORS setup
+# === CORS setup ===
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow Streamlit or frontend
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Global variables
+# === Globals ===
 index = None
 dataset = None
 
-# Input model
+
 class QueryModel(BaseModel):
     query: str
 
-# Health endpoint
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# Root endpoint
+
 @app.get("/")
 def root():
     return {"message": "Backend is live 🚀"}
 
-# Lazy load FAISS + dataset
+
+# === Load FAISS + dataset safely ===
 def load_all():
     global index, dataset
     try:
-        print(f"🔹 Trying to load {DATA_PATH} and {FAISS_PATH}")
+        print(f"🔹 Loading dataset from: {DATA_PATH}")
         dataset = pd.read_csv(DATA_PATH)
+        print(f"✅ Loaded dataset with {len(dataset)} rows")
 
-        # Use mmap mode to reduce memory usage
+        print(f"🔹 Loading FAISS index from: {FAISS_PATH}")
         index = faiss.read_index(FAISS_PATH, faiss.IO_FLAG_MMAP)
+        print("✅ FAISS index loaded successfully!")
 
-        print("✅ FAISS index + dataset loaded successfully!")
     except Exception as e:
-        print(f"❌ Error loading files: {e}")
+        print(f"❌ Error while loading FAISS/data: {e}")
     finally:
         gc.collect()
 
-# Background load on startup
+
 @app.on_event("startup")
 async def startup_event():
+    print("🚀 Starting backend...")
     threading.Thread(target=load_all).start()
     gc.collect()
 
-# Recommend endpoint
+
 @app.post("/recommend/recommend")
 def recommend(query: QueryModel):
     global index, dataset
 
-    # Check if data loaded
+    # Retry wait loop
+    retries = 0
+    while (index is None or dataset is None) and retries < 10:
+        print("⏳ Waiting for FAISS + dataset to load...")
+        time.sleep(3)
+        retries += 1
+
     if index is None or dataset is None:
-        return {"error": "Model not loaded yet. Please wait a few seconds and try again."}
+        return {"error": "Model not loaded yet. Please retry after 30 seconds."}
 
     try:
         from sentence_transformers import SentenceTransformer
         model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
-        # Convert query into embedding
         query_vector = model.encode([query.query])
         D, I = index.search(query_vector, 5)
 
-        # Get top recommendations
         recommendations = []
         for idx, score in zip(I[0], D[0]):
             rec = dataset.iloc[idx].to_dict()
@@ -93,7 +106,7 @@ def recommend(query: QueryModel):
     except Exception as e:
         return {"error": str(e)}
 
-# Gunicorn port setup (Render requirement)
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
