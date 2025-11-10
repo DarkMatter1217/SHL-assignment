@@ -12,7 +12,13 @@ DATA_PATH = "./data/catalog_clean.csv"
 EMB_PATH = "./embeddings/embeddings.npy"
 FAISS_PATH = "./embeddings/vector_store.faiss"
 
-GEMINI_KEY = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") 
+if "GEMINI_API_KEY" in st.secrets:
+    GEMINI_KEY = st.secrets["GEMINI_API_KEY"]
+else:
+    GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+
+if not GEMINI_KEY:
+    st.error("❌ Gemini API key not found. Please set it in Streamlit Secrets or as an environment variable.")
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
