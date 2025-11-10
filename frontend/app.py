@@ -14,8 +14,6 @@ FAISS_PATH = "./embeddings/vector_store.faiss"
 
 if "GEMINI_API_KEY" in st.secrets:
     GEMINI_KEY = st.secrets["GEMINI_API_KEY"]
-else:
-    GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_KEY:
     st.error("❌ Gemini API key not found. Please set it in Streamlit Secrets or as an environment variable.")
