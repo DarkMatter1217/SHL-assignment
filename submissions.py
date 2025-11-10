@@ -1,28 +1,15 @@
-# ==========================================================
-#  File: submissions.py
-#  Purpose: Generate final submission CSV for SHL AI Intern task
-#  Dataset Columns: ['Query', 'Assessment_url']
-# ==========================================================
-
 import requests
 import pandas as pd
 from tqdm import tqdm
 import os
 
-# ==========================================================
-# 🔧 CONFIGURATION
-# ==========================================================
-API_URL = "http://localhost:8000/recommend"   # FastAPI backend endpoint
-INPUT_FILE = r"test.xlsx"      # Path to your dataset
-OUTPUT_FILE = "submission.csv"                # Final output file
+API_URL = "http://localhost:8000/recommend"
+INPUT_FILE = r"test.xlsx"
+OUTPUT_FILE = "Prabhjot_Singh.csv"
 
-# ==========================================================
-# 🧠 LOAD DATASET
-# ==========================================================
 if not os.path.exists(INPUT_FILE):
     raise FileNotFoundError(f"❌ File not found: {INPUT_FILE}")
 
-# Load Excel or CSV
 if INPUT_FILE.endswith(".xlsx"):
     df = pd.read_excel(INPUT_FILE)
 else:
@@ -30,7 +17,6 @@ else:
 
 print("\n📂 Columns found in dataset:", df.columns.tolist())
 
-# Manually specify correct column (since your dataset uses 'Query')
 JD_COLUMN = "Query"
 
 if JD_COLUMN not in df.columns:
@@ -38,9 +24,6 @@ if JD_COLUMN not in df.columns:
 
 print(f"✅ Using column for job description: '{JD_COLUMN}'")
 
-# ==========================================================
-# 🚀 PROCESS EACH JOB DESCRIPTION
-# ==========================================================
 results = []
 print("\n🚀 Generating AI-powered recommendations...\n")
 
@@ -87,9 +70,6 @@ for i, row in tqdm(df.iterrows(), total=len(df)):
             "Recommended Assessments": "Request Error"
         })
 
-# ==========================================================
-# 💾 SAVE SUBMISSION
-# ==========================================================
 submission_df = pd.DataFrame(results)
 submission_df.to_csv(OUTPUT_FILE, index=False, encoding="utf-8-sig")
 print(f"\n✅ Submission file generated successfully → {OUTPUT_FILE}")
