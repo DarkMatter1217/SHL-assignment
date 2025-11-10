@@ -6,16 +6,14 @@ import faiss
 import numpy as np
 import os
 import json
-import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.messages import HumanMessage
 from sentence_transformers import SentenceTransformer
 
-try:
-    GEMINI_KEY = st.secrets["GEMINI_API_KEY"]
-    print("🔑 Gemini API key loaded successfully from Streamlit secrets.")
-except Exception:
-    raise ValueError("❌ Missing GEMINI_API_KEY in .streamlit/secrets.toml")
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_KEY:
+    raise ValueError("❌ GEMINI_API_KEY not found in environment variables.")
+print("🔑 Gemini API key loaded successfully.")
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 DATA_PATH = os.path.join(ROOT, "data", "catalog_clean.csv")
@@ -57,7 +55,7 @@ def rerank_with_gemini(query: str, candidates: List[Dict[str, Any]], top_k: int 
 
         prompt = f"""
 You are an AI recruitment assistant.
-Given a job description and a list of SHL assessments, 
+Given a job description and a list of SHL assessments,
 select the {top_k} most relevant ones in order of importance.
 
 Job Description:
@@ -66,7 +64,7 @@ Job Description:
 Assessments (JSON list):
 {json.dumps([c['assessment_name'] for c in candidates])}
 
-Return your answer **strictly as a valid JSON array only** — 
+Return your answer **strictly as a valid JSON array only** —
 no explanations, no text before or after.
 Example:
 ["Assessment A", "Assessment B", "Assessment C"]
@@ -146,3 +144,8 @@ def recommend(req: RecommendRequest):
     except Exception as e:
         print("❌ Internal server error:", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port)
