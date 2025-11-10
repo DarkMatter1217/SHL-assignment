@@ -48,7 +48,8 @@ if st.button("✨ Getting Recommendations"):
 
         with st.spinner("Generating Gemini-powered recommendations..."):
             try:
-                res = requests.post(f"{api_url}/recommend", json=payload, timeout=60)
+                res = requests.post(f"{api_url}/recommend/recommend", json={"query": query})
+
             except Exception as e:
                 st.error(f"Request failed: {e}")
                 res = None
