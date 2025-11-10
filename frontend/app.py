@@ -30,7 +30,7 @@ if st.button("✨ Getting Recommendations"):
         st.warning("Please enter a job description first.")
     else:
         top_k = random.randint(5, 10)
-        api_url = "https://shl-genai-backend.onrender.com/recommend"
+        api_url ="http://localhost:8000"
 
         # Read key from Streamlit secrets (must exist)
         try:
