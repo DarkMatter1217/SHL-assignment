@@ -1,16 +1,17 @@
 import os
-import uvicorn
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import pandas as pd
-import faiss
-import numpy as np
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
-from langchain_google_genai import ChatGoogleGenerativeAI
+import faiss
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="SHL Backend", version="final")
+# ---------------------------------------------------------------------
+# ✅ Config
+# ---------------------------------------------------------------------
+app = FastAPI(title="SHL Smart Assessment Recommender")
 
+# Allow CORS (important for Streamlit frontend)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,46 +20,80 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-df, index, embedder, model = None, None, None, None
-ROOT = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH = os.path.join(ROOT, "..", "data", "catalog_clean.csv")
-FAISS_PATH = os.path.join(ROOT, "..", "embeddings", "vector_store.faiss")
+# Define paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_PATH = os.path.join(BASE_DIR, "../data/catalog_clean.csv")
+FAISS_PATH = os.path.join(BASE_DIR, "../embeddings/vector_store.faiss")
 
-class Query(BaseModel):
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+
+# ---------------------------------------------------------------------
+# ✅ Input Schema
+# ---------------------------------------------------------------------
+class RequestData(BaseModel):
     query: str
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "message": "Backend running fine 🚀"}
 
-def load_resources():
-    global df, index, embedder, model
-    if df is None:
+# ---------------------------------------------------------------------
+# ✅ Safe loader for FAISS + CSV + Model
+# ---------------------------------------------------------------------
+def load_all():
+    try:
+        print("🔹 Loading dataset, model and FAISS index...")
         df = pd.read_csv(DATA_PATH)
-    if index is None:
+        model = SentenceTransformer(MODEL_NAME)
         index = faiss.read_index(FAISS_PATH)
-    if embedder is None:
-        embedder = SentenceTransformer("all-MiniLM-L6-v2")
-    if model is None:
-        key = os.environ.get("GEMINI_API_KEY")
-        if not key:
-            raise ValueError("❌ GEMINI_API_KEY not found in environment variables")
-        model = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=key)
-    print("✅ Resources loaded successfully")
+        print("✅ Successfully loaded resources")
+        return df, model, index
+    except Exception as e:
+        print(f"❌ Resource loading failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Resource load error: {str(e)}")
 
+
+# ---------------------------------------------------------------------
+# ✅ Health check
+# ---------------------------------------------------------------------
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------
+# ✅ Recommendation Endpoint
+# ---------------------------------------------------------------------
 @app.post("/recommend/recommend")
-def recommend(req: Query):
-    load_resources()
-    query_emb = embedder.encode([req.query], convert_to_numpy=True)
-    D, I = index.search(query_emb.astype("float32"), k=5)
-    results = df.iloc[I[0]][["assessment_name", "category", "test_type", "url"]].to_dict(orient="records")
-    return {"query": req.query, "recommendations": results}
+def recommend(request: RequestData):
+    try:
+        df, model, index = load_all()
 
-@app.get("/")
-def root():
-    return {"message": "Use /recommend/recommend to query recommendations ✅"}
+        # Generate query embedding
+        query_vector = model.encode([request.query])
 
+        # Search top 5 nearest vectors
+        distances, indices = index.search(query_vector, k=5)
+
+        # Prepare results
+        results = []
+        for i, score in zip(indices[0], distances[0]):
+            if 0 <= i < len(df):
+                item = df.iloc[i].to_dict()
+                item["similarity_score"] = float(score)
+                results.append(item)
+
+        return {"query": request.query, "recommendations": results}
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"🔥 Recommendation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------
+# ✅ Main entry (for local dev and Render)
+# ---------------------------------------------------------------------
 if __name__ == "__main__":
+    import uvicorn
+
     port = int(os.environ.get("PORT", 10000))
-    print(f"🚀 Starting app on 0.0.0.0:{port}")
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=port)
