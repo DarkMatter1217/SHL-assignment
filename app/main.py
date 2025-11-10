@@ -27,7 +27,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Model paths (adjust as per your structure)
+# ✅ Model paths
 DATA_PATH = "data/data.csv"
 FAISS_PATH = "faiss_store.index"
 EMB_PATH = "embeddings.npy"
@@ -70,7 +70,6 @@ def load_resources():
 
     print("✅ All resources loaded successfully.")
 
-
 # ✅ Recommendation endpoint
 @app.post("/recommend/recommend")
 def recommend(req: QueryRequest):
@@ -83,19 +82,9 @@ def recommend(req: QueryRequest):
 
     return {"query": req.query, "recommendations": results}
 
-
 # ✅ Root route
 @app.get("/")
 def root():
     return {"message": "Backend live ✅ Use /recommend/recommend to query."}
 
-
-# ✅ Render-safe entrypoint
-if __name__ == "__main__":
-    import uvicorn
-
-    port = int(os.environ.get("PORT", 8000))
-    print(f"🚀 Starting FastAPI server on port {port} ...")
-
-    # Important: Gunicorn-compatible startup
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, log_level="info")
+# ⚠️ Note: Removed uvicorn.run() to prevent double boot under Gunicorn
