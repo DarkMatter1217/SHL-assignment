@@ -1,158 +1,101 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+import os
 import pandas as pd
 import faiss
 import numpy as np
-import os
-import json
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.messages import HumanMessage
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sentence_transformers import SentenceTransformer
+from langchain_google_genai import ChatGoogleGenerativeAI
+from pydantic import BaseModel
 
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_KEY:
-    raise ValueError("❌ GEMINI_API_KEY not found in environment variables.")
-print("🔑 Gemini API key loaded successfully.")
+# ✅ Lazy load placeholders
+df = None
+index = None
+embeddings = None
+embedder = None
+model = None
 
-ROOT = os.path.dirname(os.path.dirname(__file__))
-DATA_PATH = os.path.join(ROOT, "data", "catalog_clean.csv")
-EMB_PATH = os.path.join(ROOT, "embeddings", "embeddings.npy")
-FAISS_PATH = os.path.join(ROOT, "embeddings", "vector_store.faiss")
+# ✅ FastAPI app setup
+app = FastAPI(title="SHL GenAI Backend", version="1.0")
 
-app = FastAPI(
-    title="SHL Recommender with LangChain Gemini",
-    description="FAISS + LangChain Gemini (2.5-flash) backend for AI-powered assessment recommendations",
-    version="v5.0"
+# ✅ CORS setup
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-print("🧠 Loading FAISS, data, and embedding model...")
-df = pd.read_csv(DATA_PATH)
-embeddings = np.load(EMB_PATH)
-index = faiss.read_index(FAISS_PATH)
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
-print("✅ All resources loaded successfully.")
+# ✅ Model paths (adjust as per your structure)
+DATA_PATH = "data/data.csv"
+FAISS_PATH = "faiss_store.index"
+EMB_PATH = "embeddings.npy"
 
-def safe_float(x: Any) -> float:
-    try:
-        v = float(x)
-        return 0.0 if np.isnan(v) or np.isinf(v) else v
-    except Exception:
-        return 0.0
-
-def rerank_with_gemini(query: str, candidates: List[Dict[str, Any]], top_k: int = 10) -> List[Dict[str, Any]]:
-    """
-    Uses LangChain's ChatGoogleGenerativeAI (Gemini 2.5 Flash)
-    to rerank SHL assessments based on JD relevance.
-    Enforces valid JSON output.
-    """
-    try:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            temperature=0.2,
-            google_api_key=GEMINI_KEY,
-        )
-
-        prompt = f"""
-You are an AI recruitment assistant.
-Given a job description and a list of SHL assessments,
-select the {top_k} most relevant ones in order of importance.
-
-Job Description:
-{query}
-
-Assessments (JSON list):
-{json.dumps([c['assessment_name'] for c in candidates])}
-
-Return your answer **strictly as a valid JSON array only** —
-no explanations, no text before or after.
-Example:
-["Assessment A", "Assessment B", "Assessment C"]
-"""
-
-        response = llm.invoke([HumanMessage(content=prompt)])
-        text = response.content.strip()
-
-        if "[" in text and "]" in text:
-            text = text[text.find("["): text.rfind("]") + 1]
-
-        try:
-            ranked_names = json.loads(text)
-        except Exception:
-            print("⚠️ Gemini output not valid JSON, using fallback FAISS results.")
-            return candidates[:top_k]
-
-        ranked = [c for c in candidates if c["assessment_name"] in ranked_names]
-        for c in candidates:
-            if c not in ranked:
-                ranked.append(c)
-
-        return ranked[:top_k]
-
-    except Exception as e:
-        print(f"⚠️ Gemini rerank failed: {e}")
-        return candidates[:top_k]
-
-class RecommendRequest(BaseModel):
-    query: str
-    top_k: Optional[int] = 10
-    rerank: Optional[bool] = True
-
+# ✅ Health check route
 @app.get("/health")
-def health():
+def health_check():
     return {"status": "ok", "message": "LangChain Gemini backend live 🚀"}
 
-@app.post("/recommend")
-def recommend(req: RecommendRequest):
-    """
-    Main API endpoint:
-    - Searches FAISS for closest embeddings
-    - Optionally reranks with Gemini (via LangChain)
-    - Returns SHL formatted recommendations
-    """
-    try:
-        if not req.query.strip():
-            raise HTTPException(status_code=400, detail="Empty job description.")
+# ✅ Pydantic input model
+class QueryRequest(BaseModel):
+    query: str
 
-        q_emb = embedder.encode([req.query], convert_to_numpy=True)
-        D, I = index.search(q_emb.astype("float32"), max(20, req.top_k * 2))
+# ✅ Function to load models and data only once
+def load_resources():
+    global df, index, embeddings, embedder, model
 
-        results = []
-        for i, idx in enumerate(I[0]):
-            if idx < 0 or idx >= len(df):
-                continue
-            row = df.iloc[idx]
-            results.append({
-                "assessment_name": str(row.get("assessment_name", "")).strip(),
-                "description": str(row.get("description", "")).strip(),
-                "category": str(row.get("category", "")).strip(),
-                "test_type": str(row.get("test_type", "")).strip(),
-                "url": str(row.get("url", "")).strip(),
-                "score": safe_float(D[0][i])
-            })
+    if df is None:
+        print("📂 Loading dataset...")
+        df = pd.read_csv(DATA_PATH)
 
-        if req.rerank:
-            results = rerank_with_gemini(req.query, results, req.top_k)
+    if index is None:
+        print("🧠 Loading FAISS index...")
+        index = faiss.read_index(FAISS_PATH)
 
-        final_output = [
-            {"assessment_name": r["assessment_name"], "url": r["url"]}
-            for r in results[:req.top_k]
-        ]
+    if embeddings is None:
+        print("📦 Loading embeddings...")
+        embeddings = np.load(EMB_PATH)
 
-        return {"query": req.query, "recommendations": final_output}
+    if embedder is None:
+        print("🔍 Loading SentenceTransformer...")
+        embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
-    except Exception as e:
-        print("❌ Internal server error:", e)
-        raise HTTPException(status_code=500, detail=str(e))
+    if model is None:
+        print("🤖 Initializing Gemini model...")
+        GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
+        if not GEMINI_KEY:
+            raise ValueError("❌ Missing GEMINI_API_KEY in Render environment variables")
+        model = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=GEMINI_KEY)
 
+    print("✅ All resources loaded successfully.")
+
+
+# ✅ Recommendation endpoint
+@app.post("/recommend/recommend")
+def recommend(req: QueryRequest):
+    load_resources()
+
+    query_vector = embedder.encode([req.query])
+    distances, indices = index.search(np.array(query_vector, dtype=np.float32), k=5)
+
+    results = df.iloc[indices[0]][["name", "description", "link"]].to_dict(orient="records")
+
+    return {"query": req.query, "recommendations": results}
+
+
+# ✅ Root route
+@app.get("/")
+def root():
+    return {"message": "Backend live ✅ Use /recommend/recommend to query."}
+
+
+# ✅ Render-safe entrypoint
 if __name__ == "__main__":
     import uvicorn
-    import os
 
-    # Render injects PORT dynamically
-    port = int(os.environ.get("PORT", "8000"))
-    print(f"🚀 Starting server on port {port} ...")
+    port = int(os.environ.get("PORT", 8000))
+    print(f"🚀 Starting FastAPI server on port {port} ...")
 
-    # Important: Use 'app' directly — not 'app.main:app'
-    # otherwise uvicorn fails to detect live port in container.
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    # Important: Gunicorn-compatible startup
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, log_level="info")

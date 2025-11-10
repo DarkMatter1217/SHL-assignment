@@ -5,11 +5,10 @@ faiss-cpu
 numpy
 sentence-transformers
 streamlit
-
 langchain
 langchain-core
 langchain-google-genai
 pydantic
 typing-extensions
-
 requests
+gunicorn
