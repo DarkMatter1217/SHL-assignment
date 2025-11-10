@@ -8,18 +8,30 @@ from sentence_transformers import SentenceTransformer
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 
+<<<<<<< HEAD
+=======
+# ---------------- CONFIG ----------------
+>>>>>>> c93658ad633f2ee548ddef180e6de8f12487d230
 DATA_PATH = "./data/catalog_clean.csv"
 EMB_PATH = "./embeddings/embeddings.npy"
 FAISS_PATH = "./embeddings/vector_store.faiss"
 
 GEMINI_KEY = os.getenv("GEMINI_API_KEY") or "YOUR_GEMINI_API_KEY" or st.secrets["GEMINI_API_KEY"] 
 
+<<<<<<< HEAD
+=======
+# ---------------- MODEL INIT ----------------
+>>>>>>> c93658ad633f2ee548ddef180e6de8f12487d230
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     google_api_key=GEMINI_KEY,
     temperature=0.3
 )
 
+<<<<<<< HEAD
+=======
+# ---------------- LOAD DATA ----------------
+>>>>>>> c93658ad633f2ee548ddef180e6de8f12487d230
 @st.cache_resource
 def load_resources():
     df = pd.read_csv(DATA_PATH)
@@ -29,13 +41,25 @@ def load_resources():
 
 df, embedder, index = load_resources()
 
+<<<<<<< HEAD
+=======
+# ---------------- FAISS SEARCH ----------------
+>>>>>>> c93658ad633f2ee548ddef180e6de8f12487d230
 def search_faiss(query, k=10):
     q_emb = embedder.encode([query])
     D, I = index.search(np.array(q_emb, dtype=np.float32), k)
     return df.iloc[I[0]]
 
+<<<<<<< HEAD
 def rerank_with_gemini(query, candidates_df, top_k=5):
     """Use Gemini to rerank FAISS results with safe text cleaning."""
+=======
+# ---------------- GEMINI RERANK ----------------
+def rerank_with_gemini(query, candidates_df, top_k=5):
+    """Use Gemini to rerank FAISS results with safe text cleaning."""
+
+    # Clean all text safely
+>>>>>>> c93658ad633f2ee548ddef180e6de8f12487d230
     def safe_text(x):
         if isinstance(x, str):
             return x.strip()
@@ -62,8 +86,13 @@ def rerank_with_gemini(query, candidates_df, top_k=5):
     - Rank the **top {top_k} most relevant assessments** for this query.
     - Return ONLY a valid JSON array like:
     [
+<<<<<<< HEAD
       {"name": "Data Analysis Test", "category": "Cognitive"},
       {"name": "Leadership Potential Test", "category": "Personality"}
+=======
+      {{"name": "Data Analysis Test", "category": "Cognitive"}},
+      {{"name": "Leadership Potential Test", "category": "Personality"}}
+>>>>>>> c93658ad633f2ee548ddef180e6de8f12487d230
     ]
     """)
 
@@ -93,6 +122,10 @@ def rerank_with_gemini(query, candidates_df, top_k=5):
         candidates_df["Category"] = candidates_df["test_type"]
         return candidates_df.head(top_k)
 
+<<<<<<< HEAD
+=======
+# ---------------- STREAMLIT UI ----------------
+>>>>>>> c93658ad633f2ee548ddef180e6de8f12487d230
 st.set_page_config(page_title="SHL GenAI Recommender", layout="centered")
 st.title("SHL GenAI — Smart Assessment Recommender")
 st.write("Enter a **job role** or **skill**, and get SHL’s most relevant assessments.")
