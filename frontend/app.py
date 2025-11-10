@@ -12,7 +12,7 @@ DATA_PATH = "./data/catalog_clean.csv"
 EMB_PATH = "./embeddings/embeddings.npy"
 FAISS_PATH = "./embeddings/vector_store.faiss"
 
-GEMINI_KEY = os.getenv("GEMINI_API_KEY") or "YOUR_GEMINI_API_KEY" or st.secrets["GEMINI_API_KEY"] 
+GEMINI_KEY = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
@@ -62,8 +62,8 @@ def rerank_with_gemini(query, candidates_df, top_k=5):
     - Rank the **top {top_k} most relevant assessments** for this query.
     - Return ONLY a valid JSON array like:
     [
-      {"name": "Data Analysis Test", "category": "Cognitive"},
-      {"name": "Leadership Potential Test", "category": "Personality"}
+      {{"name": "Data Analysis Test", "category": "Cognitive"}},
+      {{"name": "Leadership Potential Test", "category": "Personality"}}
     ]
     """)
 
